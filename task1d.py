@@ -4,78 +4,83 @@ from __future__ import division
 import numpy as np
 import operator
 from base import base
+import pandas as pd
 
 base = base()
 
-# Movies watched by the user and date watched
-seeds = base.user_movie('20')
-seeds = sorted(seeds.items(), key=operator.itemgetter(1), reverse=True)
-seeds_weight = {}
-count = len(seeds)
-for seed in seeds:
-    seeds_weight[seed[0]] = count
-    count -= 1
 
-movie_genre, movie_year, genres, movie_name = base.movie_genre()
+class PPR:
+    def __init__(self):
+        self.teleport = []
+        self.movie_genre = {}
+        self.seeds_weight = {}
+        self.movie_name = {}
+        self.movies_genres_matrix= []
+        self.genres = {}
 
-movies_genres_matrix = np.zeros(shape=(len(movie_year), len(genres)), dtype=float)
+    def movie_movie_similarity(self, userid):
+        # Movies watched by the user and date watched
+        seeds = base.user_movie(userid)
+        seeds = sorted(seeds.items(), key=operator.itemgetter(1), reverse=True)
+        self.seeds_weight = {}
+        count = len(seeds)
+        for seed in seeds:
+            self.seeds_weight[seed[0]] = count
+            count -= 1
 
-movies_keys = movie_genre.keys()
-movie_index = {n: movie for movie, n in enumerate(movies_keys)}
-index_movie = {movie: n for movie, n in enumerate(movies_keys)}
+        self.movie_genre, movie_year, self.genres, self.movie_name = base.movie_genre()
 
-'''
-# Create movie-genre matrix using tf-idf values -> not working correctly. genre don't match at last
-for movie, genre in movie_genre.iteritems():
-    for g in genres:
-        if g in genre:
-            tf = 1.0 / len(genre)
-            idf = base.idf(movie_genre, g)
-            tfidf = tf * idf
-            movies_genres_matrix[movie_index[movie]][genres[g]] = tfidf
-'''
+        # movie_tag, movies, tags = base.movie_tag()
 
-# Create movie-genre matrix using count
-for movie, genre in movie_genre.iteritems():
-    for g in genres:
-        if g in genre:
-            movies_genres_matrix[movie_index[movie]][genres[g]] = 1
+        self.movies_genres_matrix = np.zeros(shape=(len(movie_year), len(self.genres)), dtype=float)
 
-# Create movie-movie matrix ie., transition matrix
-D = np.array(movies_genres_matrix)
-D_T = np.transpose(D)
-movie_movie = np.dot(D, D_T)
+        movie_index = {n: movie for movie, n in enumerate(self.movie_genre.keys())}
+        # tag_index = {n: tag for tag, n in enumerate(tags)}
 
-# Create teleportation matrix
-teleport = np.zeros(shape=(len(movie_index), 1), dtype=float)
-for seed in seeds_weight.keys():
-    teleport[movie_index[seed]] = seeds_weight[seed]
+        # Create movie-genre matrix using count
+        for movie, genre in self.movie_genre.iteritems():
+            for g in self.genres:
+                if g in genre:
+                    self.movies_genres_matrix[movie_index[movie]][self.genres[g]] += 1
 
-alpha = 0.85
-err = 0.001
+        # Create movie-movie matrix
+        D = np.array(self.movies_genres_matrix)
+        D_T = np.transpose(D)
+        movie_movie = np.dot(D, D_T)
 
-# Column normalize the transition matrix
-movie_movie_norm = movie_movie / movie_movie.sum(axis=0)
+        # Create teleportation matrix
+        self.teleport = np.zeros(shape=(len(movie_index), 1), dtype=float)
+        for seed in self.seeds_weight.keys():
+            self.teleport[movie_index[seed]] = self.seeds_weight[seed]
 
-size = movie_movie_norm.shape[0]
-t = np.array(teleport)
-pagerank = np.ones(size)
-prev = np.zeros(size)
+        return movie_movie
 
-# Calculate pagerank
-while np.sum(np.abs(pagerank - prev)) > err:
-    prev = pagerank
-    pagerank = ((1 - alpha) * np.dot(movie_movie_norm, pagerank)) + (alpha * t)
+    def calculate_pagerank(self, movie_movie):
+        alpha = 0.85
+        err = 0.001
 
-index_pagerank = {rank: n for rank, n in enumerate(pagerank[-1])}
+        # Column normalize movie-movie matrix.
+        # This matrix is transition matrix
+        movie_movie_norm = movie_movie / movie_movie.sum(axis=0)
 
-# Get the top 5 movies
-print "Top 5 movies:"
-pagerank = sorted(index_pagerank.items(), key=operator.itemgetter(1), reverse=True)
-i = 0
-while i < 5:
-    movie = index_movie[pagerank[i][0]]
-    if movie in seeds_weight.keys():
-        continue
-    print movie, movie_name[movie], "\t", movie_genre[movie], "\t", pagerank[i][1]
-    i += 1
+        size = movie_movie_norm.shape[0]
+        t = np.array(self.teleport)
+        pagerank = np.ones(size)
+        prev = np.zeros(size)
+
+        # Calculate pagerank
+        while np.sum(np.abs(pagerank - prev)) > err:
+            prev = pagerank
+            pagerank = ((1 - alpha) * np.dot(movie_movie_norm, pagerank)) + (alpha * t)
+
+        movie_pagerank = pd.DataFrame(columns=['movies', 'movienames', 'genres', 'pagerank'])
+        movie_pagerank['movies'] = self.movie_genre.keys()
+        movie_pagerank['movienames'] = self.movie_name.values()
+        movie_pagerank['genres'] = self.movie_genre.values()
+        movie_pagerank['pagerank'] = pagerank
+        movie_pagerank = movie_pagerank.sort_values(by='pagerank', ascending=False)
+
+        # Get the top 5 movies
+        top_movies = movie_pagerank[(-movie_pagerank.movies.isin(self.seeds_weight.keys()))]
+        top_movies.set_index('movies', inplace=True)
+        return top_movies.head(n=5).reset_index()

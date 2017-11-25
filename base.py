@@ -55,6 +55,28 @@ class base:
 
         return movie_genre, movie_year, genres, movie_name
 
+    # Get movies and its tags
+    def movie_tag(self):
+        movie_query = 'select movieid,moviename from .moviedata.mlmovies'
+        movies_result = self.exec_query(movie_query)
+        movies = {}
+        for movie in movies_result:
+            movies[movie[0]] = movie[1]
+
+        tag_query = 'select tagId,tag from .moviedata.genome_tags'
+        tags_result = self.exec_query(tag_query)
+        tags = {}
+        for tag in tags_result:
+            tags[tag[0]] = tag[1]
+
+        movie_tag_query = 'select movieid,tagid from (`movieid xgroup select movieid,tagid from .moviedata.mltags)'
+        movie_tag_result = self.exec_query(movie_tag_query)
+        movie_tag = {}
+        for movie in movie_tag_result:
+            movie_tag[movie[0]] = np.array(movie[1]).tolist()
+
+        return movie_tag, movies, tags
+
     # idf - In the database, log(total no. of tables / no. of tables having that value)
     def idf(self, database, value):
         total = len(database)
@@ -66,7 +88,7 @@ class base:
 
         # Calculate idf if not already done
         count = 0.0
-        for table, values in database.  iteritems():
+        for table, values in database.iteritems():
             if value in values:
                 count += 1.0
         self.idf_values[value] = math.log(total / count)
