@@ -84,3 +84,14 @@ class PPR:
         top_movies = movie_pagerank[(-movie_pagerank.movies.isin(self.seeds_weight.keys()))]
         top_movies.set_index('movies', inplace=True)
         return top_movies.head(n=5).reset_index()
+
+
+print "Enter userid:"
+userid = raw_input()
+
+ppr = PPR()
+
+movie_movie = ppr.movie_movie_similarity(userid)
+top_movies = ppr.calculate_pagerank(movie_movie)
+print "Top 5 movies:"
+print top_movies

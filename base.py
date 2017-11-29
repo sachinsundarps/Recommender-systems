@@ -50,7 +50,7 @@ class base:
                 if genre not in genres.keys():
                     genres[genre] = count
                     count += 1
-            movie_year[movie[0]] = movie[1]
+            movie_year[movie[0]] = movie[2]
             movie_name[movie[0]] = movie[3]
 
         return movie_genre, movie_year, genres, movie_name
